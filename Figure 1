@@ -1,0 +1,97 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+
+Cin_values = np.linspace(0.3, 1.2, 20)
+k_values = [3, 4]
+n_trials = 50
+n_neurons = 5000
+variation = 0.05
+alpha = 8
+lambda_penalty = 0.7
+Av_mean = 1
+R_mean = 1
+Vth_mean = 1
+
+activation_curves = {k: [] for k in k_values}
+optimal_Cin = {}
+saturation_Cin = {}
+all_trials = {k: {Cin: [] for Cin in Cin_values} for k in k_values}
+
+for k in k_values:
+    scores = []
+    for Cin in Cin_values:
+        trial_activations = []
+        for _ in range(n_trials):
+            Av = Av_mean * np.random.uniform(1 - variation, 1 + variation, n_neurons)
+            R = R_mean * np.random.uniform(1 - variation, 1 + variation, n_neurons)
+            Vth = Vth_mean * np.random.uniform(1 - variation, 1 + variation, n_neurons)
+
+            CSE = Cin / Av
+            NR = Av * (CSE ** k)
+            PSD = R * NR
+            TR = PSD / Vth
+            p_fire = 1 / (1 + np.exp(-alpha * (TR - 1)))
+            fired = np.random.rand(n_neurons) < p_fire
+
+            trial_activations.append(np.mean(fired))
+        all_trials[k][Cin] = trial_activations
+
+        mean_activation = np.mean(trial_activations)
+        score = mean_activation * (1 - lambda_penalty * mean_activation)
+        activation_curves[k].append(mean_activation)
+        scores.append(score)
+
+    activation_array = np.array(activation_curves[k])
+    optimal_Cin[k] = Cin_values[np.argmax(scores)]
+
+    max_activation = np.max(activation_array)
+
+    saturation_threshold = 0.9 * max_activation
+    saturation_indices = np.where(activation_array >= saturation_threshold)[0]
+    if len(saturation_indices) > 0:
+        saturation_idx = saturation_indices[0]
+    else:
+
+        saturation_idx = len(Cin_values) - 1
+    saturation_Cin[k] = Cin_values[saturation_idx]
+
+
+p_values = []
+for Cin_val in Cin_values:
+    trials_k3 = all_trials[3][Cin_val]
+    trials_k4 = all_trials[4][Cin_val]
+    if trials_k3 and trials_k4:
+        t_stat, p = stats.ttest_ind(trials_k3, trials_k4)
+    else:
+        p = 1.0
+    p_values.append(p)
+
+
+plt.figure(figsize=(8, 5))
+for k in k_values:
+    plt.plot(
+        Cin_values,
+        activation_curves[k],
+        label=fr"k = {k} (Optimal ≈ {optimal_Cin[k]:.2f})")
+    plt.axvline(optimal_Cin[k], linestyle="--", alpha=0.5)
+
+    c_sat_text = rf"$C_{{\rm sat}}$ ≈ {saturation_Cin[k]:.2f}"
+
+c_sat_text = rf"$C_{{\rm sat}}$ ≈ {saturation_Cin[3]:.2f}"
+plt.gcf().text(0.1, 0.81, c_sat_text, fontsize=10, bbox=dict(facecolor='white', alpha=0.5, edgecolor='gray'))
+
+for i, p in enumerate(p_values):
+    if p < 0.05:
+        y_k3 = activation_curves[3][i]
+        y_k4 = activation_curves[4][i]
+        y = max(y_k3, y_k4)
+        plt.scatter(Cin_values[i], y, color='red', marker='*')
+
+plt.xlabel(r"Calcium Influx, $C_{in}$ (µM/ms)")
+plt.ylabel("Fraction of Neuroreceptors Activated")
+plt.ylim(0, 1)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
