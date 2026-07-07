@@ -1,0 +1,27 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+k_values = [3, 4]
+Cin_values = np.linspace(0.3, 1.2, 20)
+C_sat = 1.11
+
+plt.figure(figsize=(8, 5))
+
+for k in k_values:
+    activation = np.array(activation_curves[k])
+    calcium_utilised = Cin_values * activation
+    Cin_effective = np.minimum(calcium_utilised, C_sat)
+    calcium_wasted = Cin_values - Cin_effective
+
+    plt.plot(
+        Cin_values,
+        calcium_wasted,
+        label=f"Calcium Wasted (k = {k})"
+    )
+
+plt.xlabel(r"Calcium Influx, $C_{in}$ (µM/ms)")
+plt.ylabel(r"Calcium Wasted (µM/ms)")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
