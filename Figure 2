@@ -1,0 +1,87 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+
+Cin_values = np.linspace(0.3, 1.2, 20)
+k_values = [3, 4]
+n_trials = 50
+n_neurons = 5000
+variation = 0.05
+alpha = 8
+Av_mean = 1
+R_mean = 1
+Vth_mean = 1
+reflex_threshold = 0.5
+time_points = np.linspace(0, 200, 200)
+
+withdrawal_times_dict = {k: [] for k in k_values}
+all_trials_for_ttest = {k: {Cin: [] for Cin in Cin_values} for k in k_values}
+
+for k in k_values:
+    for Cin_val in Cin_values:
+        individual_t_reflexes = []
+        for _ in range(n_trials):
+            mean_activation_over_time = []
+            for t in time_points:
+
+                Av_current_trial = Av_mean * np.random.uniform(1 - variation, 1 + variation, n_neurons)
+                R_current_trial = R_mean * np.random.uniform(1 - variation, 1 + variation, n_neurons)
+                Vth_current_trial = Vth_mean * np.random.uniform(1 - variation, 1 + variation, n_neurons)
+
+                CSE = Cin_val / Av_current_trial
+                NR = Av_current_trial * (CSE ** k)
+                PSD = R_current_trial * NR
+                TR = (PSD * t / 10) / Vth_current_trial
+                Pfire = 1 / (1 + np.exp(-alpha * (TR - 1)))
+
+                fired = np.random.rand(n_neurons) < Pfire
+                mean_activation_over_time.append(np.mean(fired))
+
+            mean_activation_over_time = np.array(mean_activation_over_time)
+            above_thresh = np.where(mean_activation_over_time >= reflex_threshold)[0]
+            if len(above_thresh) > 0:
+                t_reflex = time_points[above_thresh[0]]
+            else:
+                t_reflex = np.nan
+            individual_t_reflexes.append(t_reflex)
+
+        all_trials_for_ttest[k][Cin_val] = individual_t_reflexes
+        withdrawal_times_dict[k].append(np.nanmean(individual_t_reflexes))
+
+p_values = []
+for Cin_val in Cin_values:
+    trials_k3 = all_trials_for_ttest[3][Cin_val]
+    trials_k4 = all_trials_for_ttest[4][Cin_val]
+
+    trials_k3_filtered = [x for x in trials_k3 if not np.isnan(x)]
+    trials_k4_filtered = [x for x in trials_k4 if not np.isnan(x)]
+
+    if len(trials_k3_filtered) > 1 and len(trials_k4_filtered) > 1:
+        t_stat, p = stats.ttest_ind(trials_k3_filtered, trials_k4_filtered, nan_policy='omit')
+    else:
+        p = 1.0
+    p_values.append(p)
+
+plt.figure(figsize=(8,5))
+for k in k_values:
+    plt.plot(Cin_values, withdrawal_times_dict[k], linewidth=2, label=f"k = {k}")
+
+for i, p in enumerate(p_values):
+    if p < 0.05:
+        y_k3_val = withdrawal_times_dict[3][i]
+        y_k4_val = withdrawal_times_dict[4][i]
+
+        if not np.isnan(y_k3_val) and not np.isnan(y_k4_val):
+            y = max(y_k3_val, y_k4_val)
+        elif not np.isnan(y_k3_val):
+            y = y_k3_val
+        elif not np.isnan(y_k4_val):
+            y = y_k4_val
+        plt.scatter(Cin_values[i], y, color='red', marker='*', s=100)
+
+plt.ylabel("Neuronal Reflex Latencies (ms)")
+plt.xlabel(r"Calcium Influx, $C_{in}$ (µM/ms)")
+plt.legend(framealpha=1, edgecolor='black')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
